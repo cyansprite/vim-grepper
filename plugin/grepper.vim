@@ -718,8 +718,9 @@ function! s:process_flags(flags)
   endif
 
   if a:flags.searchreg || a:flags.highlight
-    let @/ = s:query2vimregexp(a:flags)
-    call histadd('search', @/)
+    " Could make an option for it instead
+    " call histadd('search', @/)
+    call s:highlight_query(a:flags)
     if a:flags.highlight
       call feedkeys(":set hls\<bar>echo\<cr>", 'n')
     endif
@@ -1028,6 +1029,56 @@ function! s:finish_up(flags)
 endfunction
 
 " }}}1
+
+" -highlight {{{1
+" s:highlight_query() {{{2
+function! s:highlight_query(flags)
+  try | call matchdelete(4736) | catch *
+  endtry
+
+  let query = has_key(a:flags, 'query_orig') ? a:flags.query_orig : a:flags.query
+
+  let vim_query = s:query2vimregexp(a:flags)
+
+  try
+      call matchadd('GrepperMatch', vim_query, -100, 4736)
+  catch /.*/
+      return
+  endtry
+  let s:highlight_query = l:vim_query
+endfunction
+
+func! HighlightCurrentGrepWord() "{{{1
+    try | call matchdelete(4737) | catch *
+    endtry
+    if !has_key(s:,'highlight_query')
+      return
+    endif
+    try
+        let sp = searchpos(s:highlight_query, "nbc", line('.'))
+        let sp2 = searchpos(s:highlight_query, "nec", line('.'))
+        let sp3 = searchpos(s:highlight_query, "n", line('.'))
+        let len = sp2[1] - sp[1] + 1
+
+        if &hlsearch && sp != [0,0] && sp2 != [0,0] && (sp2[1] < sp3[1] || sp3 == [0,0])
+            call matchaddpos('GrepperCurrent', [[line('.'), sp[1], l:len], ] , 4737, 4737)
+        else
+        endif
+    catch /.*/
+        return
+    endtry
+endfunc
+
+hi GrepperCurrent ctermfg=11 ctermbg=none cterm=inverse
+hi GrepperMatch   ctermfg=10 ctermbg=none cterm=inverse
+
+augroup grephigh "{{{1
+    autocmd!
+    autocmd CursorMoved * call HighlightCurrentGrepWord()
+    autocmd CursorHold  * call HighlightCurrentGrepWord()
+    autocmd InsertEnter * call HighlightCurrentGrepWord()
+    autocmd ColorScheme * call HighlightCurrentGrepWord()
+augroup END
 
 " -side {{{1
 let s:filename_regexp = '\v^%(\>\>\>|\]\]\]) ([[:alnum:][:blank:]\/\-_.~]+):(\d+)'
